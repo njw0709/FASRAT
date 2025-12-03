@@ -40,8 +40,7 @@ jobs:
     
     - name: Test package installation
       run: |
-        uv pip install -e .
-        fasrat --help
+        uv run fasrat --help
     
     - name: Test import
       run: |

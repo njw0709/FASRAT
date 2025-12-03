@@ -37,8 +37,7 @@ jobs:
     
     - name: Test package installation
       run: |
-        uv pip install -e .
-        fasrat --help
+        uv run fasrat --help
 
   build-and-publish:
     name: Build and publish package to PyPI
