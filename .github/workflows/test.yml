@@ -36,7 +36,7 @@ jobs:
     
     - name: Run tests
       run: |
-        uv run pytest || echo "No tests found, skipping..."
+        uv run pytest -v
     
     - name: Test package installation
       run: |
