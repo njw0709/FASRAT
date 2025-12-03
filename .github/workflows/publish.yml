@@ -43,10 +43,11 @@ jobs:
     name: Build and publish package to PyPI
     needs: test  # Only publish if tests pass
     runs-on: ubuntu-latest
+    environment: pypi  # Use the GitHub environment for additional protection
     permissions:
-      id-token: write
+      id-token: write  # Required for trusted publishing
       contents: read
-
+    
     steps:
     - name: Check out the repository
       uses: actions/checkout@v4
@@ -67,6 +68,5 @@ jobs:
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
         print-hash: true
 
