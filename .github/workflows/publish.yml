@@ -43,7 +43,10 @@ jobs:
     name: Build and publish package to PyPI
     needs: test  # Only publish if tests pass
     runs-on: ubuntu-latest
-    
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
     - name: Check out the repository
       uses: actions/checkout@v4
