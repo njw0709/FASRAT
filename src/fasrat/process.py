@@ -76,8 +76,14 @@ def compute_raster_weights(
         if crs:
             target_crs = crs
             print(f"Using provided CRS: {target_crs}")
+            if raster_data.crs and raster_data.crs != target_crs:
+                raise ValueError(
+                    f"Provided CRS {target_crs} does not match raster CRS {raster_data.crs}."
+                )
         else:
             target_crs = raster_data.crs
+            if target_crs is None:
+                raise ValueError("Raster has no CRS and no CRS was provided.")
             print(f"Using raster CRS: {target_crs}")
 
         gdf_contiguous_us.to_crs(target_crs, inplace=True)
