@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def compute_raster_weights(
-    shapefile_path: str, raster_path: str, output_path: str
+    shapefile_path: str, raster_path: str, output_path: str, crs: str = None
 ) -> None:
     """
     Compute area-weighted spatial reaggregation weights between shapefile geometries and raster pixels.
@@ -21,6 +21,8 @@ def compute_raster_weights(
         shapefile_path: Path to the shapefile (.shp file)
         raster_path: Path to the sample raster file (.nc format)
         output_path: Full path for the output HDF5 file (including filename and .h5 extension)
+        crs: Optional CRS string (e.g., "EPSG:4326") to project the shapefile to.
+             If None, uses the CRS from the raster file.
 
     Returns:
         None. Results are saved to the specified HDF5 file.
@@ -70,9 +72,15 @@ def compute_raster_weights(
     # Load raster file and convert CRS
     print("Computing raster weights for each geometry...")
     with rasterio.open(raster_path) as raster_data:
-        crs = raster_data.crs
-        print(f"Raster CRS: {crs}")
-        gdf_contiguous_us.to_crs(crs, inplace=True)
+        # Use provided CRS if available, otherwise use raster CRS
+        if crs:
+            target_crs = crs
+            print(f"Using provided CRS: {target_crs}")
+        else:
+            target_crs = raster_data.crs
+            print(f"Using raster CRS: {target_crs}")
+
+        gdf_contiguous_us.to_crs(target_crs, inplace=True)
 
         # Compute bounding boxes for each geometry
         gdf_contiguous_us["bounds"] = gdf_contiguous_us["geometry"].apply(
