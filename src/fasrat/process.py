@@ -337,22 +337,62 @@ def apply_raster_weights(
             # Get subset of raster data
             if is_timeseries:
                 data_subset = raster_data[:, row_start:row_stop, col_start:col_stop]
-                # Handle masked arrays - fill masked values with 0
+
+                # Create mask for invalid values (masked or NaN)
+                # Check each time slice for masked/NaN values
+                invalid_mask = np.zeros(data_subset.shape[1:], dtype=bool)
                 if np.ma.is_masked(data_subset):
-                    data_subset = np.ma.filled(data_subset, 0)
-                data_subset[np.isnan(data_subset)] = 0
-                # Compute weighted sum across spatial dimensions
-                weighted_values = np.sum(data_subset * weight, axis=(1, 2))
-                result_array[idx, :] = weighted_values
+                    # Combine masks across all time slices
+                    invalid_mask |= np.any(data_subset.mask, axis=0)
+                    data_subset = np.ma.filled(data_subset, np.nan)
+
+                # Add NaN locations to the mask (check across time dimension)
+                invalid_mask |= np.any(np.isnan(data_subset), axis=0)
+
+                # Adjust weights: set invalid locations to 0
+                adjusted_weight = weight.copy()
+                adjusted_weight[invalid_mask] = 0
+
+                # Renormalize weights to sum to 1
+                weight_sum = np.sum(adjusted_weight)
+                if weight_sum > 0:
+                    adjusted_weight = adjusted_weight / weight_sum
+                    # Set data to 0 where invalid (for clean computation)
+                    data_subset = np.nan_to_num(data_subset, nan=0.0)
+                    # Compute weighted sum across spatial dimensions
+                    weighted_values = np.sum(data_subset * adjusted_weight, axis=(1, 2))
+                    result_array[idx, :] = weighted_values
+                else:
+                    # All weights are zero (all data invalid)
+                    result_array[idx, :] = np.nan
             else:
                 data_subset = raster_data[row_start:row_stop, col_start:col_stop]
-                # Handle masked arrays - fill masked values with 0
+
+                # Create mask for invalid values (masked or NaN)
+                invalid_mask = np.zeros(data_subset.shape, dtype=bool)
                 if np.ma.is_masked(data_subset):
-                    data_subset = np.ma.filled(data_subset, 0)
-                data_subset[np.isnan(data_subset)] = 0
-                # Compute weighted sum
-                weighted_value = np.sum(data_subset * weight)
-                result_array[idx] = weighted_value
+                    invalid_mask |= data_subset.mask
+                    data_subset = np.ma.filled(data_subset, np.nan)
+
+                # Add NaN locations to the mask
+                invalid_mask |= np.isnan(data_subset)
+
+                # Adjust weights: set invalid locations to 0
+                adjusted_weight = weight.copy()
+                adjusted_weight[invalid_mask] = 0
+
+                # Renormalize weights to sum to 1
+                weight_sum = np.sum(adjusted_weight)
+                if weight_sum > 0:
+                    adjusted_weight = adjusted_weight / weight_sum
+                    # Set data to 0 where invalid (for clean computation)
+                    data_subset = np.nan_to_num(data_subset, nan=0.0)
+                    # Compute weighted sum
+                    weighted_value = np.sum(data_subset * adjusted_weight)
+                    result_array[idx] = weighted_value
+                else:
+                    # All weights are zero (all data invalid)
+                    result_array[idx] = np.nan
 
     # Create output DataFrame
     print("Creating output DataFrame...")
