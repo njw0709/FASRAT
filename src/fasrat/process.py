@@ -4,6 +4,7 @@ import os
 from tqdm import tqdm
 from fasrat import constants, geometry
 import pandas as pd
+import pickle
 
 
 def compute_raster_weights(
@@ -123,6 +124,7 @@ def compute_raster_weights(
 
     # Drop geometry column and save to pandas df
     df_weights = pd.DataFrame(gdf_contiguous_us.loc[:, cols_to_save])
+    df_weights["weight"] = df_weights["weight"].apply(pickle.dumps)
 
     # Save to HDF5 file
     df_weights.to_parquet(
