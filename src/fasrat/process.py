@@ -337,11 +337,17 @@ def apply_raster_weights(
             # Get subset of raster data
             if is_timeseries:
                 data_subset = raster_data[:, row_start:row_stop, col_start:col_stop]
+                # Handle masked arrays - fill masked values with 0
+                if np.ma.is_masked(data_subset):
+                    data_subset = np.ma.filled(data_subset, 0)
                 # Compute weighted sum across spatial dimensions
                 weighted_values = np.sum(data_subset * weight, axis=(1, 2))
                 result_array[idx, :] = weighted_values
             else:
                 data_subset = raster_data[row_start:row_stop, col_start:col_stop]
+                # Handle masked arrays - fill masked values with 0
+                if np.ma.is_masked(data_subset):
+                    data_subset = np.ma.filled(data_subset, 0)
                 # Compute weighted sum
                 weighted_value = np.sum(data_subset * weight)
                 result_array[idx] = weighted_value
