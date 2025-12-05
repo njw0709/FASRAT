@@ -125,10 +125,9 @@ def compute_raster_weights(
     df_weights = pd.DataFrame(gdf_contiguous_us.loc[:, cols_to_save])
 
     # Save to HDF5 file
-    df_weights.to_hdf(
+    df_weights.to_parquet(
         output_path,
-        key="weights",
-        mode="w",
+        index=False,
     )
 
     print(f"Done! Results saved to: {output_path}")
