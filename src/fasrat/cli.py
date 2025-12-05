@@ -3,7 +3,7 @@
 FASRAT CLI - Fast Area-weighted Spatial ReAggregation Tool
 
 Command-line interface for computing area-weighted spatial reaggregation weights
-between shapefile geometries and raster pixels, and applying them to NetCDF data.
+between shapefile geometries and raster pixels, and applying them to raster data.
 """
 import click
 import sys
@@ -19,7 +19,7 @@ def main():
 
     - weights: Compute area-weighted intersection weights between geometries and rasters
 
-    - convert: Apply pre-computed weights to NetCDF data for spatial averaging
+    - convert: Apply pre-computed weights to raster data for spatial averaging
     """
     pass
 
@@ -107,11 +107,11 @@ def weights(shapefile, raster, output, crs):
     help="Path to the weights parquet file (output from 'weights' command)",
 )
 @click.option(
-    "--netcdf",
-    "-n",
+    "--raster",
+    "-r",
     required=True,
     type=click.Path(exists=True, file_okay=True, dir_okay=False, resolve_path=True),
-    help="Path to the NetCDF file containing raster data",
+    help="Path to the raster file (supports any format readable by rasterio)",
 )
 @click.option(
     "--output",
@@ -119,13 +119,6 @@ def weights(shapefile, raster, output, crs):
     required=True,
     type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
     help="Path for the output file (CSV or parquet)",
-)
-@click.option(
-    "--variable",
-    "-v",
-    default=None,
-    type=str,
-    help="NetCDF variable name to process. If not specified, auto-detects when only one variable exists.",
 )
 @click.option(
     "--geoid-col",
@@ -148,43 +141,40 @@ def weights(shapefile, raster, output, crs):
     default=False,
     help="Output time-series data in long format (rows = geoid x time). Default is wide format (rows = time, columns = geoids).",
 )
-def convert(weights, netcdf, output, variable, geoid_col, format, long):
+def convert(weights, raster, output, geoid_col, format, long):
     """
-    Apply pre-computed raster weights to NetCDF data for weighted spatial averaging.
+    Apply pre-computed raster weights to raster data for weighted spatial averaging.
     
-    This command takes a weights file (from the 'weights' command) and a NetCDF raster file,
-    then computes weighted averages for each geometry. Supports both time-series (daily/monthly)
-    and single-time (annual) data.
+    This command takes a weights file (from the 'weights' command) and a raster file,
+    then computes weighted averages for each geometry. Supports both time-series (multi-band)
+    and single-time (single-band) data.
     
     Example:
     
         fasrat convert --weights ./output/tract_weights.parquet \\
-                       --netcdf ./data/pm25_2010.nc \\
+                       --raster ./data/pm25_2010.nc \\
                        --output ./output/pm25_tract_2010.csv
         
         # With long format for time-series:
         
         fasrat convert --weights ./output/tract_weights.parquet \\
-                       --netcdf ./data/pm25_2010.nc \\
+                       --raster ./data/pm25_2010.nc \\
                        --output ./output/pm25_tract_2010.csv \\
                        --long
         
-        # With specific variable and parquet output:
+        # With parquet output:
         
         fasrat convert --weights ./output/tract_weights.parquet \\
-                       --netcdf ./data/pm25_2010.nc \\
+                       --raster ./data/pm25_2010.nc \\
                        --output ./output/pm25_tract_2010.parquet \\
-                       --variable PM25 \\
                        --format parquet
     """
     click.echo("=" * 60)
     click.echo("FASRAT - Converting Raster to Weighted Averages")
     click.echo("=" * 60)
     click.echo(f"Weights file: {weights}")
-    click.echo(f"NetCDF file: {netcdf}")
+    click.echo(f"Raster file: {raster}")
     click.echo(f"Output file: {output}")
-    if variable:
-        click.echo(f"NetCDF variable: {variable}")
     if geoid_col:
         click.echo(f"Geometry ID column: {geoid_col}")
     click.echo(f"Output format: {format}")
@@ -192,7 +182,7 @@ def convert(weights, netcdf, output, variable, geoid_col, format, long):
     click.echo("=" * 60)
 
     try:
-        apply_raster_weights(weights, netcdf, output, variable, geoid_col, format, long)
+        apply_raster_weights(weights, raster, output, geoid_col, format, long)
         click.echo("=" * 60)
         click.secho("✓ Conversion completed successfully!", fg="green", bold=True)
         click.echo("=" * 60)

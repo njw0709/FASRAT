@@ -45,8 +45,12 @@ def get_larger_bounds(coord: list, raster_size: list, start_point: bool = True) 
 def convert_bbox_coord_to_raster_index(
     bounding_box: tuple, raster_src: rasterio.io.DatasetReader
 ) -> Union[None, List[List[int]]]:
+
     row_start, col_start = raster_src.index(bounding_box[0], bounding_box[3])
     row_stop, col_stop = raster_src.index(bounding_box[2], bounding_box[1])
+    row_start, row_stop = sorted([row_start, row_stop])
+    col_start, col_stop = sorted([col_start, col_stop])
+
     row_start, col_start = get_larger_bounds(
         [row_start, col_start], raster_src.shape, start_point=True
     )

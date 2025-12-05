@@ -64,38 +64,75 @@ pip install git+https://github.com/yourusername/fasrat.git
 
 ### Command-Line Interface
 
-FASRAT provides a simple CLI with three required parameters:
+FASRAT provides two main commands:
+
+#### 1. Computing Weights
+
+First, compute the area-weighted intersection weights between your shapefile and raster grid:
 
 ```bash
-fasrat --shapefile <SHAPEFILE_PATH> --raster <RASTER_FILE> --output <OUTPUT_FILE>
+fasrat weights --shapefile <SHAPEFILE_PATH> --raster <RASTER_FILE> --output <OUTPUT_FILE>
 ```
 
 **Parameters:**
 
 - `--shapefile` or `-s`: Path to your shapefile (.shp file)
-- `--raster` or `-r`: Path to a sample raster file in NetCDF format (.nc)
-- `--output` or `-o`: Full path for the output HDF5 file (e.g., `/path/to/weights.h5`)
+- `--raster` or `-r`: Path to a sample raster file (any format supported by rasterio)
+- `--output` or `-o`: Full path for the output parquet file (e.g., `/path/to/weights.parquet`)
+- `--crs` or `-c`: Optional CRS string (e.g., 'EPSG:4326') to project the shapefile to
 
-### Example
+**Example:**
 
 ```bash
-fasrat --shapefile ../shapefiles/us_tract_2010/US_tract_2010.shp \
-       --raster /data/climate/tmmx_2010.nc \
-       --output ./output/tract_weights.h5
+fasrat weights --shapefile ../shapefiles/us_tract_2010/US_tract_2010.shp \
+               --raster /data/climate/tmmx_2010.nc \
+               --output ./output/tract_weights.parquet
 ```
 
-Or using short options:
+#### 2. Converting Raster Data
+
+Apply the pre-computed weights to raster data for spatial averaging:
 
 ```bash
-fasrat -s ../shapefiles/us_tract_2010/US_tract_2010.shp \
-       -r /data/climate/tmmx_2010.nc \
-       -o ./output/tract_weights.h5
+fasrat convert --weights <WEIGHTS_FILE> --raster <RASTER_FILE> --output <OUTPUT_FILE>
+```
+
+**Parameters:**
+
+- `--weights` or `-w`: Path to the weights parquet file (from the weights command)
+- `--raster` or `-r`: Path to the raster file to process (any format supported by rasterio)
+- `--output` or `-o`: Path for the output file (CSV or parquet)
+- `--geoid-col` or `-g`: Geometry ID column name (auto-detects if not specified)
+- `--format` or `-f`: Output format ('csv' or 'parquet', default is 'csv')
+- `--long` or `-l`: Output time-series data in long format (default is wide format)
+
+**Example:**
+
+```bash
+# Convert raster data to tract-level averages
+fasrat convert --weights ./output/tract_weights.parquet \
+               --raster ./data/pm25_2010.nc \
+               --output ./output/pm25_tract_2010.csv
+
+# With long format for time-series data
+fasrat convert --weights ./output/tract_weights.parquet \
+               --raster ./data/pm25_2010.nc \
+               --output ./output/pm25_tract_2010.csv \
+               --long
+
+# Output as parquet
+fasrat convert --weights ./output/tract_weights.parquet \
+               --raster ./data/pm25_2010.nc \
+               --output ./output/pm25_tract_2010.parquet \
+               --format parquet
 ```
 
 ### Getting Help
 
 ```bash
 fasrat --help
+fasrat weights --help
+fasrat convert --help
 ```
 
 ## Using FASRAT Programmatically
@@ -103,13 +140,22 @@ fasrat --help
 In addition to the command-line interface, you can use FASRAT as a Python library in your own scripts:
 
 ```python
-from fasrat import compute_raster_weights
+from fasrat import compute_raster_weights, apply_raster_weights
 
-# Compute weights
+# Step 1: Compute weights
 compute_raster_weights(
     shapefile_path="./shapefiles/us_tract_2010/US_tract_2010.shp",
     raster_path="./data/tmmx_2010.nc",
-    output_path="./output/tract_weights.h5"
+    output_path="./output/tract_weights.parquet"
+)
+
+# Step 2: Apply weights to raster data
+apply_raster_weights(
+    weights_path="./output/tract_weights.parquet",
+    raster_path="./data/pm25_2010.nc",
+    output_path="./output/pm25_tract_2010.csv",
+    output_format="csv",
+    long_format=False
 )
 ```
 
@@ -129,16 +175,19 @@ If your shapefile includes a state FIPS code column (e.g., `STATEFP10`, `STATEFP
 
 ### Raster File
 
-The raster file should be in NetCDF format (`.nc`). The tool uses this file to:
+The raster file can be in any format supported by rasterio (NetCDF `.nc`, GeoTIFF `.tif`, etc.). The tool uses this file to:
 1. Determine the coordinate reference system (CRS) for spatial alignment
 2. Extract pixel resolution and dimensions
 3. Compute the intersection weights between polygons and pixels
+4. Read and aggregate raster data values
 
-The raster file can contain any variable - the tool only uses the spatial metadata and grid structure.
+For multi-band rasters, each band is treated as a time step. Single-band rasters are treated as single-time data.
 
 ## Output Format
 
-FASRAT outputs an HDF5 file containing a pandas DataFrame with the following columns:
+### Weights File
+
+FASRAT outputs a parquet file containing a pandas DataFrame with the following columns:
 
 - `raster_bbox_coords`: Bounding box coordinates in raster index space for each polygon
 - `weight`: A NumPy array (weight matrix) representing the area-weighted intersection between the polygon and each overlapping raster pixel. Weights sum to 1.0 for each polygon.
@@ -146,33 +195,21 @@ FASRAT outputs an HDF5 file containing a pandas DataFrame with the following col
 - `bounds`: The geographic bounding box of each polygon
 - `GEOID10` (or similar): The identifier from the original shapefile (if available)
 
-### Using the Output
+### Converted Data File
 
-You can read and use the output weights like this:
+The `convert` command outputs aggregated data in CSV or parquet format:
 
-```python
-import pandas as pd
-import rasterio
-import numpy as np
+**Single-band rasters:**
+- Rows = geometry IDs
+- Columns = geometry ID column and 'value'
 
-# Load the weights
-weights_df = pd.read_hdf('tract_weights.h5', key='weights')
+**Multi-band rasters (wide format, default):**
+- Rows = time steps (band indices)
+- Columns = geometry IDs
 
-# Load your raster data
-with rasterio.open('your_raster.nc') as src:
-    for idx, row in weights_df.iterrows():
-        if row['weight'] is None:
-            continue
-        
-        # Get the raster subset
-        bbox = row['raster_bbox_coords']
-        window = rasterio.windows.Window.from_slices(*bbox)
-        raster_data = src.read(1, window=window)
-        
-        # Apply weights to aggregate
-        weighted_value = np.sum(raster_data * row['weight'])
-        print(f"Polygon {idx}: {weighted_value}")
-```
+**Multi-band rasters (long format, with --long flag):**
+- Rows = geometry ID × time combinations
+- Columns = 'time', geometry ID column, 'value'
 
 ## How It Works
 
@@ -192,9 +229,9 @@ with rasterio.open('your_raster.nc') as src:
 - pandas >= 2.3.3
 - numpy >= 2.0.2
 - shapely >= 2.0.7
-- netcdf4 >= 1.7.2
 - tqdm >= 4.67.1
 - click >= 8.1.7
+- pyarrow (for parquet support)
 
 ## License
 
